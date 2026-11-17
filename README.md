@@ -1,6 +1,6 @@
 # Merchant Lens
 
-A Next.js dashboard for answering focused questions from merchant order history. It includes a sample database in `lib/merchant-data.ts`; replace those arrays with your database queries when connecting production data.
+A Next.js dashboard for answering focused questions from merchant order history. Its development database is the supplied `data/store-order-history.csv`, parsed by `lib/merchant-data.ts` at runtime.
 
 ## Run locally
 

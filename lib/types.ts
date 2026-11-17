@@ -4,6 +4,7 @@ export type Order = {
   id: string;
   orderDate: string;
   customerId: string;
+  isRepeatCustomer: boolean;
   product: string;
   category: string;
   color: string;

@@ -20,11 +20,10 @@ export function returnsOnlineVsOffline(startDate: string, endDate: string): Reco
   }, { online: 0, offline: 0 });
 }
 
-/** Sales metric: classifies an order as repeat if an earlier order exists for its customer; uses orderDate. */
+/** Sales metric: uses the database's is_repeat_customer flag and filters with orderDate. */
 export function repeatVsNewCustomerSales(startDate: string, endDate: string) {
   return rangeOrders({ startDate, endDate }).reduce((total, order) => {
-    const isRepeat = orders.some((earlier) => earlier.customerId === order.customerId && earlier.orderDate < order.orderDate);
-    total[isRepeat ? "repeatSales" : "newSales"] += order.total;
+    total[order.isRepeatCustomer ? "repeatSales" : "newSales"] += order.total;
     return total;
   }, { repeatSales: 0, newSales: 0 });
 }

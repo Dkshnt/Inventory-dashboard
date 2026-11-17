@@ -1,5 +1,5 @@
 import Dashboard from "./dashboard";
-import { mostSoldProduct, repeatVsNewCustomerSales, returnsOnlineVsOffline, topProductCategory, totalSalesForBlackItems } from "@/lib/metrics";
+import { latestOrderDate, mostSoldProduct, repeatVsNewCustomerSales, returnsOnlineVsOffline, topProductCategory, totalSalesForBlackItems } from "@/lib/metrics";
 
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 
@@ -8,7 +8,7 @@ export default function Page() {
   const juneReturns = returnsOnlineVsOffline("2025-06-01", "2025-06-30");
   const customerSales = repeatVsNewCustomerSales("2025-06-01", "2025-06-30");
   const julyCategory = topProductCategory("2025-07-01", "2025-07-31")!;
-  return <Dashboard metrics={[
+  return <Dashboard latestOrder={latestOrderDate()} metrics={[
     { label: "Most sold product · June", value: juneProduct.product, sub: `${juneProduct.units} units` },
     { label: "Returns · June", value: `${juneReturns.online} / ${juneReturns.offline}`, sub: "Online / Offline units" },
     { label: "Customer sales · June", value: `${money(customerSales.repeatSales)} / ${money(customerSales.newSales)}`, sub: "Repeat / New" },

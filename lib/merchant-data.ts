@@ -1,24 +1,24 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Order, ReturnRecord } from "./types";
 
-// Replace these arrays with a database query in production. Dates are ISO calendar dates.
-export const orders: Order[] = [
-  { id: "O-100", orderDate: "2025-05-28", customerId: "C-01", product: "Classic Tee", category: "Apparel", color: "Black", channel: "online", quantity: 1, total: 30 },
-  { id: "O-101", orderDate: "2025-06-03", customerId: "C-02", product: "Canvas Tote", category: "Accessories", color: "Natural", channel: "offline", quantity: 2, total: 40 },
-  { id: "O-102", orderDate: "2025-06-09", customerId: "C-01", product: "Classic Tee", category: "Apparel", color: "Black", channel: "online", quantity: 3, total: 90 },
-  { id: "O-103", orderDate: "2025-06-16", customerId: "C-03", product: "Classic Tee", category: "Apparel", color: "White", channel: "offline", quantity: 2, total: 60 },
-  { id: "O-104", orderDate: "2025-06-24", customerId: "C-04", product: "Everyday Mug", category: "Home", color: "Black", channel: "online", quantity: 1, total: 24 },
-  { id: "O-105", orderDate: "2025-07-02", customerId: "C-05", product: "Cloud Hoodie", category: "Apparel", color: "Blue", channel: "online", quantity: 1, total: 72 },
-  { id: "O-106", orderDate: "2025-07-10", customerId: "C-03", product: "Classic Tee", category: "Apparel", color: "Black", channel: "offline", quantity: 1, total: 30 },
-  { id: "O-107", orderDate: "2025-07-18", customerId: "C-06", product: "Trail Cap", category: "Accessories", color: "Green", channel: "online", quantity: 2, total: 48 },
-  { id: "O-108", orderDate: "2025-07-22", customerId: "C-07", product: "Classic Tee", category: "Apparel", color: "Black", channel: "online", quantity: 4, total: 120 },
-  { id: "O-109", orderDate: "2025-09-10", customerId: "C-08", product: "Cloud Hoodie", category: "Apparel", color: "Black", channel: "online", quantity: 1, total: 72 },
-  { id: "O-110", orderDate: "2025-09-10", customerId: "C-01", product: "Canvas Tote", category: "Accessories", color: "Black", channel: "offline", quantity: 2, total: 40 },
-  { id: "O-111", orderDate: "2025-09-11", customerId: "C-09", product: "Everyday Mug", category: "Home", color: "Black", channel: "online", quantity: 1, total: 24 }
-];
+type CsvRow = Record<string, string>;
+const filePath = path.join(process.cwd(), "data", "store-order-history.csv");
+const [header, ...lines] = fs.readFileSync(filePath, "utf8").trim().split(/\r?\n/);
+const columns = header.split(",");
+const rows: CsvRow[] = lines.map((line) => Object.fromEntries(columns.map((column, index) => [column, line.split(",")[index] ?? ""])));
+const channel = (value: string) => value === "Point of Sale" ? "offline" as const : "online" as const;
+const color = (variant: string) => variant.split("/").at(-1)?.trim() ?? "";
 
-export const returns: ReturnRecord[] = [
-  { id: "R-01", orderId: "O-102", returnDate: "2025-06-18", channel: "online", quantity: 1 },
-  { id: "R-02", orderId: "O-103", returnDate: "2025-06-20", channel: "offline", quantity: 1 },
-  { id: "R-03", orderId: "O-107", returnDate: "2025-07-26", channel: "online", quantity: 1 },
-  { id: "R-04", orderId: "O-106", returnDate: "2025-08-01", channel: "offline", quantity: 1 }
-];
+/** The checked-in CSV is the development database. Keep its date fields in ISO YYYY-MM-DD form. */
+export const orders: Order[] = rows.map((row) => ({
+  id: row.line_item_id, orderDate: row.order_date, customerId: row.customer_id,
+  isRepeatCustomer: row.is_repeat_customer === "true", product: row.product_title,
+  category: row.product_category, color: color(row.variant), channel: channel(row.sales_channel),
+  quantity: Number(row.quantity), total: Number(row.line_total)
+}));
+
+export const returns: ReturnRecord[] = rows.filter((row) => row.returned === "true" && row.return_date).map((row) => ({
+  id: `return-${row.line_item_id}`, orderId: row.line_item_id, returnDate: row.return_date,
+  channel: channel(row.sales_channel), quantity: Number(row.quantity)
+}));

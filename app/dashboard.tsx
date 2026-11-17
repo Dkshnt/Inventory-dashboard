@@ -12,7 +12,7 @@ const prompts = [
 
 type Metric = { label: string; value: string; sub: string };
 
-export default function Dashboard({ metrics }: { metrics: Metric[] }) {
+export default function Dashboard({ metrics, latestOrder }: { metrics: Metric[]; latestOrder: string }) {
   const [question, setQuestion] = useState(prompts[0]);
   const [answer, setAnswer] = useState("Ask an analytics question to see the answer and its date logic.");
   const [loading, setLoading] = useState(false);
@@ -28,6 +28,6 @@ export default function Dashboard({ metrics }: { metrics: Metric[] }) {
     <section className="grid metrics">{metrics.map((metric) => <article className="card" key={metric.label}><div className="label">{metric.label}</div><div className="value">{metric.value}</div><div className="sub">{metric.sub}</div></article>)}</section>
     <section className="grid workspace"><div className="ask"><h2>Ask order history</h2><div className="suggestions">{prompts.map((prompt) => <button key={prompt} onClick={() => setQuestion(prompt)}>{prompt}</button>)}</div><form className="prompt" onSubmit={ask}><input aria-label="Analytics question" value={question} onChange={(event) => setQuestion(event.target.value)} /><button disabled={loading}>{loading ? "Reading…" : "Ask"}</button></form><div className="answer"><strong>Answer</strong>{answer}</div></div>
     <aside className="rules"><h2>Date rules</h2><div className="rule"><b>Last week</b><br />The complete Monday–Sunday calendar week immediately before a fixed date.</div><div className="rule"><b>This month</b><br />The month containing the latest available order entry.</div><div className="rule"><b>Sales questions</b><br />Always filter by <code>orderDate</code>.</div><div className="rule"><b>Return questions</b><br />Always filter by <code>returnDate</code>.</div></aside></section>
-    <p className="foot">Sample merchant dataset · Latest order: 11 Sep 2025 · Currency shown in USD</p>
+    <p className="foot">CSV merchant database · Latest order: {latestOrder} · Currency shown in USD</p>
   </main>;
 }
