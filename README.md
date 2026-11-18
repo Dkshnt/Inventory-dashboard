@@ -11,6 +11,34 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## AI merchant chat
+
+The chat endpoint (`POST /api/chat`) sends the merchant's wording to OpenRouter solely to choose **one** approved metric tool and exact dates. The selected plain-code tool then queries the local CSV; OpenRouter never receives the order-history rows.
+
+Add your OpenRouter key to `.env.local`:
+
+```bash
+OPENROUTER_API_KEY=your_key_here
+# Optional: choose any tool-capable model available to your account.
+OPENROUTER_MODEL=openai/gpt-4o-mini
+```
+
+`.env.local` is Git-ignored. Do not put the key in `.env.example` or commit it.
+
+### Tool calls and date interpretation
+
+Every chat request must produce exactly one tool call with inclusive `startDate` and `endDate` values. The server rejects zero or multiple calls.
+
+| Merchant wording | Tool | Exact date range |
+| --- | --- | --- |
+| “Which products were returned more — online or offline?” | `returns_online_vs_offline` | `2025-05-01` to `2025-10-31` (complete reporting period when omitted) |
+| “Are regular customers purchasing more than new customers?” | `repeat_vs_new_customer_sales` | `2025-05-01` to `2025-10-31` |
+| “How many black items did we sell on 10th Sep?” | `total_sales_for_black_items` | `2025-09-10` to `2025-09-10` |
+| “In July, which was our most sold item?” | `top_product_category` | `2025-07-01` to `2025-07-31` |
+| “Which product did we sell most in June?” | `most_sold_product` | `2025-06-01` to `2025-06-30` |
+
+The router treats `10/9/2025` as DD/MM/YYYY, `last week` as `2025-10-20` through `2025-10-26`, and `last month` as `2025-09-01` through `2025-09-30`. These ranges are calculated from the fixed sample reference date `2025-10-28`. `this month` is the month containing the latest CSV entry (`2025-10-01` through `2025-10-27`).
+
 ## Metrics
 
 Every metric is a plain TypeScript function that accepts exact `startDate` and `endDate` strings (`YYYY-MM-DD`) and returns its result:

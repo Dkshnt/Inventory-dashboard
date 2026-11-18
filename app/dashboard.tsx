@@ -14,12 +14,12 @@ type Metric = { label: string; value: string; sub: string };
 
 export default function Dashboard({ metrics, latestOrder }: { metrics: Metric[]; latestOrder: string }) {
   const [question, setQuestion] = useState(prompts[0]);
-  const [answer, setAnswer] = useState("Ask an analytics question to see the answer and its date logic.");
+  const [answer, setAnswer] = useState("Ask an analytics question to see the answer and the exact date range used.");
   const [loading, setLoading] = useState(false);
   async function ask(event?: FormEvent) {
     event?.preventDefault(); setLoading(true);
-    const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
-    const data = await response.json(); setAnswer(data.answer); setLoading(false);
+    const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    const data = await response.json(); setAnswer(data.error ?? `${data.answer} Date range: ${data.range}.`); setLoading(false);
   }
   return <main className="shell">
     <div className="eyebrow">Merchant Lens · Order intelligence</div>

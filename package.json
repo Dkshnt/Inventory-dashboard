@@ -8,7 +8,7 @@
     "build": "node ./node_modules/next/dist/bin/next build",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "tsc --noEmit",
-    "test": "tsx --test lib/metrics.test.ts"
+    "test": "tsx --test lib/*.test.ts"
   },
   "dependencies": {
     "next": "^15.5.9",
