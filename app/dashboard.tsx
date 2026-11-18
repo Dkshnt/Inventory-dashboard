@@ -17,9 +17,15 @@ export default function Dashboard({ metrics, latestOrder }: { metrics: Metric[];
   const [answer, setAnswer] = useState("Ask an analytics question to see the answer and the exact date range used.");
   const [loading, setLoading] = useState(false);
   async function ask(event?: FormEvent) {
-    event?.preventDefault(); setLoading(true);
-    const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
-    const data = await response.json(); setAnswer(data.error ?? `${data.answer} Date range: ${data.range}.`); setLoading(false);
+    event?.preventDefault(); setLoading(true); setAnswer("");
+    try {
+      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+      if (!response.ok || !response.body) throw new Error("The chat service is unavailable.");
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let streamed = "";
+      while (true) { const { done, value } = await reader.read(); if (done) break; streamed += decoder.decode(value, { stream: true }); setAnswer(streamed); }
+      streamed += decoder.decode(); setAnswer(streamed || "No answer was returned.");
+    } catch (error) { setAnswer(error instanceof Error ? error.message : "The chat service is unavailable."); }
+    finally { setLoading(false); }
   }
   return <main className="shell">
     <div className="eyebrow">Merchant Lens · Order intelligence</div>

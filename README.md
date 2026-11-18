@@ -13,7 +13,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## AI merchant chat
 
-The chat endpoint (`POST /api/chat`) sends the merchant's wording to OpenRouter solely to choose **one** approved metric tool and exact dates. The selected plain-code tool then queries the local CSV; OpenRouter never receives the order-history rows.
+The chat endpoint (`POST /api/chat`) uses Vercel AI SDK's `streamText` with the OpenRouter provider. It streams the final answer to the dashboard as it arrives. OpenRouter selects **one** approved metric tool and exact dates; the selected plain-code tool then queries the local CSV. OpenRouter never receives the order-history rows.
 
 Add your OpenRouter key to `.env.local`:
 
