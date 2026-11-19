@@ -84,3 +84,6 @@ npm run lint
 npm test
 npm run build
 ```
+
+
+SS - <img width="650" height="506" alt="image" src="https://github.com/user-attachments/assets/e03a78af-dc48-44b8-979e-138b17ede450" />
