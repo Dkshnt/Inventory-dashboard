@@ -15,7 +15,7 @@ function value(value: unknown, currency = false) {
 
 function Bars({ values, currency = false }: { values: Array<{ label: string; value: number }>; currency?: boolean }) {
   const max = Math.max(...values.map((item) => item.value), 1);
-  return <div className="bar-chart">{values.map((item) => <div className="bar-row" key={item.label}><div className="bar-meta"><span>{item.label}</span><b>{value(item.value, currency)}</b></div><div className="bar-track"><div className="bar-fill" style={{ width: `${item.value / max * 100}%` }} /></div></div>)}</div>;
+  return <div className="bar-chart">{values.map((item) => <div className="bar-row" key={item.label}><div className="bar-meta"><span>{item.label}</span></div><div className="bar-hit" tabIndex={0} aria-label={`${item.label}: ${value(item.value, currency)}`}><div className="bar-track"><div className="bar-fill" style={{ width: `${item.value / max * 100}%` }} /></div><span className="chart-tooltip"><b>{item.label}</b><span>{value(item.value, currency)}</span></span></div></div>)}</div>;
 }
 
 function Chart({ tool, output }: { tool: string; output: ToolOutput }) {
