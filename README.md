@@ -86,4 +86,5 @@ npm run build
 ```
 
 
-SS - <img width="650" height="506" alt="image" src="https://github.com/user-attachments/assets/e03a78af-dc48-44b8-979e-138b17ede450" />
+SS - <img width="653" height="492" alt="image" src="https://github.com/user-attachments/assets/edcd69a1-a514-41d7-8975-530efa8f030c" />
+
