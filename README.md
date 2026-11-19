@@ -51,6 +51,15 @@ Every metric is a plain TypeScript function that accepts exact `startDate` and `
 
 The implementation lives in `lib/metrics.ts`, with a test suite in `lib/metrics.test.ts`.
 
+## Visualization rules
+
+- **Line chart:** use for trends, where a metric is compared across time periods.
+- **Bar chart:** use for comparisons; the dashboard applies it to online versus offline returns and repeat versus new-customer sales.
+- **Single metric card:** use for totals and ranked numbers; the dashboard applies it to the June top product, 10 September black-item sales, and July top category.
+- **Table:** use when the merchant asks for detailed rows or columns rather than one aggregate or comparison.
+
+All dashboard visualizations are generated only from `data/store-order-history.csv`. After a question is submitted, the answer section shows a black-and-white throbbing histogram while the metric tool runs, then fades into the appropriate chart.
+
 ## Date rules
 
 - **Last week** is the full Monday–Sunday calendar week before a supplied fixed date. The reproducible default is `FIXED_TODAY = "2025-10-28"`; callers can still pass another exact date as the second argument.
