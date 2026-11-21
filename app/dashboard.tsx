@@ -3,38 +3,98 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart } from "ai";
 import { FormEvent, useMemo, useState } from "react";
+import type { QueryOutput } from "@/lib/query";
 
-const prompts = ["What was the most sold product in June?", "Which products were returned more — online or offline?", "Is sales from repeat customers more than new customers?", "Tell me total sales for black items for 10/9/2025", "Which product category was sold most in July?"];
+const prompts = [
+  "What was the most sold product in June?",
+  "Which jackets came back the most?",
+  "Which products were returned more — online or offline?",
+  "Is sales from repeat customers more than new customers?",
+  "How many black items did we sell on 10/9/2025?",
+  "Which product category was sold most in July?",
+  "Show monthly revenue",
+  "Compare October and September revenue by category",
+  "List Instagram orders"
+];
 type Metric = { label: string; value: string; sub: string };
-type ToolOutput = { answer: string; range: string; data: Record<string, unknown> | number | null };
+type Format = "number" | "currency" | "percent";
+type Result = { output: QueryOutput; error?: undefined } | { error: string; output?: undefined } | null;
 
-function value(value: unknown, currency = false) {
-  if (typeof value !== "number") return String(value ?? "—");
-  return currency ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value) : String(value);
+function fmt(value: number, format: Format) {
+  if (format === "currency") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+  if (format === "percent") return `${(value * 100).toFixed(1)}%`;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-function Bars({ values, currency = false }: { values: Array<{ label: string; value: number }>; currency?: boolean }) {
+function Bars({ values, format }: { values: Array<{ label: string; value: number }>; format: Format }) {
   const max = Math.max(...values.map((item) => item.value), 1);
-  return <div className="bar-chart">{values.map((item) => <div className="bar-row" key={item.label}><div className="bar-meta"><span>{item.label}</span></div><div className="bar-hit" tabIndex={0} aria-label={`${item.label}: ${value(item.value, currency)}`}><div className="bar-track"><div className="bar-fill" style={{ width: `${item.value / max * 100}%` }} /></div><span className="chart-tooltip"><b>{item.label}</b><span>{value(item.value, currency)}</span></span></div></div>)}</div>;
+  return <div className="bar-chart">{values.map((item) => <div className="bar-row" key={item.label}><div className="bar-meta"><span>{item.label}</span><b>{fmt(item.value, format)}</b></div><div className="bar-track"><div className="bar-fill" style={{ width: `${item.value / max * 100}%` }} /></div></div>)}</div>;
 }
 
-function Chart({ tool, output }: { tool: string; output: ToolOutput }) {
-  const data = output.data;
-  if (tool === "returns_online_vs_offline" && data && typeof data === "object") return <><div className="result-kicker">Comparison · return date</div><h3>Returns by channel</h3><Bars values={[{ label: "Online", value: Number(data.online) }, { label: "Offline", value: Number(data.offline) }]} /></>;
-  if (tool === "repeat_vs_new_customer_sales" && data && typeof data === "object") return <><div className="result-kicker">Comparison · order date</div><h3>Customer sales mix</h3><Bars currency values={[{ label: "Repeat customers", value: Number(data.repeatSales) }, { label: "New customers", value: Number(data.newSales) }]} /></>;
-  const headline = tool === "total_sales_for_black_items" ? value(data, true) : data && typeof data === "object" ? String(data.product ?? data.category ?? "No result") : "No result";
-  const sub = data && typeof data === "object" && "units" in data ? `${data.units} units sold` : "Total sales";
-  return <><div className="result-kicker">Single metric · order date</div><h3>{tool.replaceAll("_", " ")}</h3><div className="single-metric"><div>{headline}</div><span>{sub}</span></div></>;
+function PairedBars({ values, format, currentLabel, previousLabel }: { values: Array<{ label: string; current: number; previous: number }>; format: Format; currentLabel: string; previousLabel: string }) {
+  const max = Math.max(...values.flatMap((item) => [item.current, item.previous]), 1);
+  return <div className="bar-chart">
+    <div className="legend"><span><i className="swatch now" />{currentLabel}</span><span><i className="swatch before" />{previousLabel}</span></div>
+    {values.map((item) => <div className="bar-row" key={item.label}>
+      <div className="bar-meta"><span>{item.label}</span><b>{fmt(item.current, format)} <em>vs {fmt(item.previous, format)}</em></b></div>
+      <div className="bar-track"><div className="bar-fill" style={{ width: `${item.current / max * 100}%` }} /></div>
+      <div className="bar-track thin"><div className="bar-fill prev" style={{ width: `${item.previous / max * 100}%` }} /></div>
+    </div>)}
+  </div>;
 }
 
-function HistogramLoader() { return <div className="loading-viz" aria-label="Loading chart"><div className="histogram"><i /><i /><i /><i /><i /><i /><i /></div><p>Turning your question into a metric…</p></div>; }
+function LineChart({ points, format }: { points: Array<{ label: string; value: number }>; format: Format }) {
+  const W = 560, H = 200, P = 28;
+  const max = Math.max(...points.map((point) => point.value), 1);
+  const step = points.length > 1 ? (W - 2 * P) / (points.length - 1) : 0;
+  const xy = points.map((point, index) => [P + index * step, H - P - (point.value / max) * (H - 2 * P)] as const);
+  return <div className="line-chart">
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Trend chart">
+      <line x1={P} y1={H - P} x2={W - P} y2={H - P} stroke="#26324b" />
+      <polyline points={xy.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke="#7c9cff" strokeWidth="2.5" strokeLinejoin="round" />
+      {xy.map(([x, y], index) => <circle key={points[index].label} cx={x} cy={y} r="4" fill="#5ce0bb"><title>{`${points[index].label}: ${fmt(points[index].value, format)}`}</title></circle>)}
+    </svg>
+    <div className="line-axis"><span>{points[0].label}</span><span>peak {fmt(max, format)}</span><span>{points[points.length - 1].label}</span></div>
+  </div>;
+}
+
+function Table({ columns, rows }: { columns: string[]; rows: Array<Array<string | number>> }) {
+  return <div className="table-wrap"><table className="data-table"><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex} className={typeof cell === "number" ? "num" : undefined}>{cell}</td>)}</tr>)}</tbody></table></div>;
+}
+
+function Chart({ output }: { output: QueryOutput }) {
+  const { data } = output;
+  switch (data.kind) {
+    case "message": return <p className="chart-note">{output.answer}</p>;
+    case "value": return <><div className="result-kicker">Single metric</div><h3>{data.label}</h3><div className="single-metric"><div>{fmt(data.value, data.format)}</div><span>{data.scope || "All matching orders"}{data.matched ? ` · ${data.matched} order line${data.matched === 1 ? "" : "s"}` : ""}</span></div></>;
+    case "groups": {
+      const points = data.rows.map((row) => ({ label: row.labels.join(" · "), value: row.value }));
+      return <><div className="result-kicker">{data.chart === "line" ? "Trend" : data.chart === "bar" ? "Comparison" : "Breakdown"}</div><h3>{data.label} by {data.dims.join(" and ").toLowerCase()}</h3>
+        {data.chart === "line" ? <LineChart points={points} format={data.format} /> : data.chart === "bar" ? <Bars values={points} format={data.format} /> : <Table columns={[...data.dims, data.label]} rows={data.rows.map((row) => [...row.labels, fmt(row.value, data.format)])} />}</>;
+    }
+    case "comparison": {
+      const title = data.dims.length ? `${data.label} by ${data.dims.join(" and ").toLowerCase()}` : data.label;
+      return <><div className="result-kicker">Period comparison</div><h3>{title}</h3>
+        {data.dims.length > 1
+          ? <Table columns={[...data.dims, "Current", "Previous", "Change"]} rows={data.rows.map((row) => [...row.labels, fmt(row.current, data.format), fmt(row.previous, data.format), `${row.change < 0 ? "-" : "+"}${fmt(Math.abs(row.change), data.format)}`])} />
+          : <PairedBars format={data.format} currentLabel={data.currentRange} previousLabel={data.previousRange} values={data.rows.map((row) => ({ label: row.labels.join(" · "), current: row.current, previous: row.previous }))} />}</>;
+    }
+    case "rows": return <><div className="result-kicker">Detail rows</div><h3>Order lines ({data.total})</h3><Table columns={data.columns} rows={data.rows} /></>;
+  }
+}
+
+function HistogramLoader() { return <div className="loading-viz" aria-label="Loading chart"><div className="histogram"><i /><i /><i /><i /><i /><i /><i /></div><p>Turning your question into a query…</p></div>; }
 
 export default function Dashboard({ metrics, latestOrder }: { metrics: Metric[]; latestOrder: string }) {
   const [question, setQuestion] = useState(prompts[0]);
   const { messages, sendMessage, status, error } = useChat({ transport: new DefaultChatTransport({ api: "/api/chat" }) });
-  const result = useMemo(() => {
-    for (const message of [...messages].reverse()) for (const part of [...message.parts].reverse()) {
-      if (isToolUIPart(part) && part.state === "output-available") return { tool: part.type.slice(5), output: part.output as ToolOutput };
+  const result = useMemo<Result>(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant") return null;
+    for (const part of [...last.parts].reverse()) {
+      if (!isToolUIPart(part)) continue;
+      if (part.state === "output-available") return { output: part.output as QueryOutput };
+      if (part.state === "output-error") return { error: part.errorText };
     }
     return null;
   }, [messages]);
@@ -42,10 +102,11 @@ export default function Dashboard({ metrics, latestOrder }: { metrics: Metric[];
   async function ask(event?: FormEvent) { event?.preventDefault(); if (question.trim()) await sendMessage({ text: question }); }
   return <main className="shell">
     <div className="eyebrow">Merchant Lens · Order intelligence</div><h1>Ask the history.<br />Find the signal.</h1>
-    <p className="lede">Ask in plain language. The assistant selects one exact, CSV-backed metric and presents the right visualization.</p>
+    <p className="lede">Ask in plain language about any product, date, channel or customer group. The assistant turns your question into an exact, CSV-backed query and picks the right visualization.</p>
     <section className="grid metrics">{metrics.map((metric) => <article className="card" key={metric.label}><div className="label">{metric.label}</div><div className="value">{metric.value}</div><div className="sub">{metric.sub}</div></article>)}</section>
-    <section className="grid workspace"><div className="ask"><h2>Ask order history</h2><div className="suggestions">{prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setQuestion(prompt)}>{prompt}</button>)}</div><form className="prompt" onSubmit={ask}><input aria-label="Analytics question" value={question} onChange={(event) => setQuestion(event.target.value)} /><button disabled={loading}>{loading ? "Thinking…" : "Ask"}</button></form><div className="chart-stage">{loading ? <HistogramLoader /> : result ? <div className="result-visual"><Chart tool={result.tool} output={result.output} /><p className="range">Exact range: {result.output.range}</p></div> : <div className="chart-empty">Your chart will appear here.</div>}{error && <p className="chart-error">{error.message}</p>}</div></div>
-    <aside className="rules"><h2>Display rules</h2><div className="rule"><b>Trend</b><br />Line chart for values changing over time.</div><div className="rule"><b>Comparison</b><br />Bar chart for online vs offline or repeat vs new.</div><div className="rule"><b>Single number</b><br />Metric card for totals and ranked results.</div><div className="rule"><b>Detailed rows</b><br />Table for row-by-row or column-by-column questions.</div></aside></section>
+    <section className="grid workspace"><div className="ask"><h2>Ask order history</h2><div className="suggestions">{prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setQuestion(prompt)}>{prompt}</button>)}</div><form className="prompt" onSubmit={ask}><input aria-label="Analytics question" value={question} onChange={(event) => setQuestion(event.target.value)} /><button disabled={loading}>{loading ? "Thinking…" : "Ask"}</button></form>
+      <div className="chart-stage">{loading ? <HistogramLoader /> : result?.output ? <div className="result-visual"><Chart output={result.output} />{result.output.data.kind !== "message" && <p className="answer">{result.output.answer}</p>}{result.output.range && <p className="range">Exact range: {result.output.range}</p>}</div> : result?.error ? <p className="chart-error">{result.error}</p> : <div className="chart-empty">Your chart will appear here.</div>}{error && <p className="chart-error">{error.message}</p>}</div></div>
+    <aside className="rules"><h2>Display rules</h2><div className="rule"><b>Trend</b><br />Line chart for values changing over days, weeks or months.</div><div className="rule"><b>Comparison</b><br />Bar chart for rankings and for comparing products, channels, colors or customer types; paired bars for one period versus another.</div><div className="rule"><b>Single number</b><br />Metric card for totals.</div><div className="rule"><b>Detailed rows</b><br />Table for order lists and two-way breakdowns.</div></aside></section>
     <p className="foot">CSV merchant database · Latest order: {latestOrder} · Currency shown in USD</p>
   </main>;
 }
