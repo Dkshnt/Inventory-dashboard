@@ -25,6 +25,8 @@ function parseLine(line: string): string[] {
 
 const [headerLine, ...lines] = fs.readFileSync(filePath, "utf8").trim().split(/\r?\n/);
 const columns = parseLine(headerLine);
+/** Names of the fields the dataset records; anything outside them is out of scope. */
+export const dataColumns: string[] = columns;
 const rows: CsvRow[] = lines.filter((line) => line.trim()).map((line) => {
   const cells = parseLine(line);
   return Object.fromEntries(columns.map((column, index) => [column, cells[index] ?? ""]));

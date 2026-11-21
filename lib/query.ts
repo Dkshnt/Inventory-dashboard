@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { lineItems } from "./merchant-data";
+import { dataColumns, lineItems } from "./merchant-data";
 import { FIXED_TODAY, resolveDateRule } from "./metrics";
 import type { LineItem } from "./types";
 
@@ -9,7 +9,7 @@ import type { LineItem } from "./types";
 
 export const METRICS = ["units_sold", "revenue", "discounts", "orders", "customers", "avg_order_value", "units_returned", "refunds", "return_rate"] as const;
 export const GROUPS = ["product", "category", "color", "size", "channel", "sales_channel", "customer_type", "customer", "fulfillment_status", "return_reason", "day", "week", "month"] as const;
-export const PERIODS = ["today", "yesterday", "this_week", "last_week", "last_7_days", "this_month", "last_month", "last_30_days", "all_time"] as const;
+export const PERIODS = ["today", "yesterday", "this_week", "last_week", "last_7_days", "this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year", "last_30_days", "all_time"] as const;
 
 export type Metric = (typeof METRICS)[number];
 export type Group = (typeof GROUPS)[number];
@@ -46,6 +46,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.");
 const terms = z.array(z.string().min(1)).max(10);
 
 export const querySchema = z.object({
+  outOfScope: z.string().nullish().describe("Set ONLY when the question asks for something this dataset cannot answer: a field it does not record (profit, margin, cost, stock/inventory, traffic, conversion, ratings, customer age/gender/location, shipping time, ad spend), a forecast or prediction, a product/value that is not in the catalog, or a topic unrelated to this store. Give a short phrase naming what was asked, e.g. \"profit margin\". Never substitute a nearby metric. Leave every other field empty."),
   show: z.enum(["summary", "rows"]).nullish().describe("summary (default): one number, a ranking, a trend or a comparison. rows: list the matching order lines when the merchant asks to list/show/see the orders or items themselves."),
   metric: z.enum(METRICS).nullish().describe("What to measure. units_sold = items sold / how many. revenue = sales / money. orders = distinct orders. customers = distinct customers. avg_order_value. units_returned = items returned. refunds = money refunded. return_rate = returned units / units sold. discounts = money discounted."),
   groupBy: z.array(z.enum(GROUPS)).max(2).nullish().describe("Break the metric down by one or two dimensions. Use it for rankings (most/best/top/which product), comparisons between values (online vs offline, black vs navy, repeat vs new) and trends (day/week/month). Omit for a single total."),
@@ -61,7 +62,7 @@ export const querySchema = z.object({
   returnedOnly: z.boolean().nullish().describe("true to include only items that were returned."),
   startDate: isoDate.nullish().describe("Inclusive start, YYYY-MM-DD. Use for named dates, months, quarters and ranges."),
   endDate: isoDate.nullish().describe("Inclusive end, YYYY-MM-DD. Same as startDate for a single day."),
-  period: z.enum(PERIODS).nullish().describe("Relative period resolved by the server from the fixed reference date. Prefer it for 'last week', 'last month', 'this month', 'yesterday' etc. Ignored when startDate/endDate are given. Omit for the whole dataset."),
+  period: z.enum(PERIODS).nullish().describe("Calendar period resolved by the server. Prefer it for 'last week', 'this week', 'last month', 'this month', 'last/this quarter', 'last/this year', 'yesterday' etc. Ignored when startDate/endDate are given. Omit when the merchant gives no date at all (the server then uses the earliest to the latest date in the dataset)."),
   dateField: z.enum(["order_date", "return_date"]).nullish().describe("Which date the range applies to. Defaults: units_returned and refunds use return_date, everything else uses order_date."),
   compareStartDate: isoDate.nullish().describe("Start of a second period to compare against (e.g. 'June vs July')."),
   compareEndDate: isoDate.nullish().describe("End of the second period."),
@@ -78,6 +79,7 @@ export type QueryInput = z.infer<typeof querySchema>;
 export type GroupRow = { labels: string[]; value: number };
 export type QueryData =
   | { kind: "message" }
+  | { kind: "out_of_scope"; reason: string }
   | { kind: "value"; label: string; format: Format; value: number; matched: number; scope: string }
   | { kind: "groups"; label: string; format: Format; dims: string[]; chart: "line" | "bar" | "table"; rows: GroupRow[]; total: number }
   | { kind: "comparison"; label: string; format: Format; currentRange: string; previousRange: string; dims: string[]; rows: Array<{ labels: string[]; current: number; previous: number; change: number; changePct: number | null }> }
@@ -100,7 +102,15 @@ function bounds(field: DateField): DateRange {
   return { startDate: dates[0] ?? FIXED_TODAY, endDate: dates.at(-1) ?? FIXED_TODAY };
 }
 
-function periodRange(period: Period, field: DateField): DateRange {
+/** Earliest and latest date anywhere in the dataset (order dates and return dates). */
+function datasetBounds(): DateRange {
+  const a = bounds("order_date");
+  const b = bounds("return_date");
+  return { startDate: a.startDate < b.startDate ? a.startDate : b.startDate, endDate: a.endDate > b.endDate ? a.endDate : b.endDate };
+}
+const quarterStart = (iso: string) => `${iso.slice(0, 4)}-${String(Math.floor((Number(iso.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+
+function periodRange(period: Period): DateRange {
   switch (period) {
     case "today": return { startDate: FIXED_TODAY, endDate: FIXED_TODAY };
     case "yesterday": { const day = addDays(FIXED_TODAY, -1); return { startDate: day, endDate: day }; }
@@ -110,21 +120,25 @@ function periodRange(period: Period, field: DateField): DateRange {
     case "this_month": return resolveDateRule("this month");
     case "last_month": { const endDate = addDays(`${FIXED_TODAY.slice(0, 7)}-01`, -1); return { startDate: `${endDate.slice(0, 7)}-01`, endDate }; }
     case "last_30_days": return { startDate: addDays(FIXED_TODAY, -29), endDate: FIXED_TODAY };
-    case "all_time": return bounds(field);
+    case "this_quarter": return { startDate: quarterStart(FIXED_TODAY), endDate: FIXED_TODAY };
+    case "last_quarter": { const endDate = addDays(quarterStart(FIXED_TODAY), -1); return { startDate: quarterStart(endDate), endDate }; }
+    case "this_year": return { startDate: `${FIXED_TODAY.slice(0, 4)}-01-01`, endDate: FIXED_TODAY };
+    case "last_year": { const year = Number(FIXED_TODAY.slice(0, 4)) - 1; return { startDate: `${year}-01-01`, endDate: `${year}-12-31` }; }
+    case "all_time": return datasetBounds();
   }
 }
 
 type RangeInput = { startDate?: string | null; endDate?: string | null; period?: Period | null };
 /** Returns a range, or a human-readable error string. */
-function resolveRange({ startDate, endDate, period }: RangeInput, field: DateField): DateRange | string {
+function resolveRange({ startDate, endDate, period }: RangeInput): DateRange | string {
   if (startDate || endDate) {
-    const edge = bounds(field);
+    const edge = datasetBounds();
     const range = { startDate: startDate ?? (endDate && endDate < edge.startDate ? endDate : edge.startDate), endDate: endDate ?? (startDate && startDate > edge.endDate ? startDate : edge.endDate) };
     if (!isRealDate(range.startDate) || !isRealDate(range.endDate)) return "One of the dates is not a real calendar date.";
     if (range.startDate > range.endDate) return "The start date is after the end date.";
     return range;
   }
-  return periodRange(period ?? "all_time", field);
+  return periodRange(period ?? "all_time");
 }
 const rangeText = (range: DateRange) => `${range.startDate} to ${range.endDate}`;
 
@@ -218,7 +232,8 @@ export function catalogText(): string {
     `Sales channels (and whether they count as online/offline): ${channels}`,
     `Return reasons: ${knownValues("returnReasons").join(", ")}`,
     `Fulfillment statuses: ${knownValues("fulfillmentStatuses").join(", ")}`,
-    `Orders span ${rangeText(orderBounds)}; returns were processed ${rangeText(returnBounds)}.`
+    `Orders span ${rangeText(orderBounds)}; returns were processed ${rangeText(returnBounds)}. The dataset covers ${rangeText(datasetBounds())}.`,
+    `Fields recorded in the data (nothing else exists): ${dataColumns.join(", ")}`
   ].join("\n");
 }
 
@@ -306,6 +321,10 @@ function fmt(value: number, format: Format) {
 }
 const signed = (value: number, format: Format) => `${value < 0 ? "-" : "+"}${fmt(Math.abs(value), format)}`;
 const message = (answer: string, range = ""): QueryOutput => ({ answer, range, data: { kind: "message" } });
+const CAPABILITIES = "units sold, revenue, discounts, orders, customers, average order value, units returned, refunds and return rate, by product, category, color, size, channel, customer type, fulfillment status, return reason, or day/week/month";
+const outOfScope = (reason: string, range = ""): QueryOutput => ({ answer: `This metric is out of scope. ${reason}`, range, data: { kind: "out_of_scope", reason } });
+const outsideCoverage = (range: DateRange) => { const coverage = datasetBounds(); return range.endDate < coverage.startDate || range.startDate > coverage.endDate; };
+const coverageReason = (range: DateRange) => `There is no data for ${rangeText(range)}. The dataset covers ${rangeText(datasetBounds())}.`;
 
 function scopeText(filters: Filters): string {
   const parts = [...filters.products, ...filters.categories, ...filters.colors, ...filters.sizes, ...filters.channels, ...filters.fulfillmentStatuses, ...filters.returnReasons.map((reason) => `returned: ${reason}`), ...filters.customerIds];
@@ -320,17 +339,19 @@ const names = (rows: GroupRow[]) => rows.slice(0, 5).map((row) => row.labels.joi
 /* ------------------------------------------------------------------ */
 
 export function runQuery(input: QueryInput): QueryOutput {
+  if (input.outOfScope?.trim()) return outOfScope(`“${input.outOfScope.trim()}” isn't recorded in this dataset. I can answer questions about ${CAPABILITIES}.`);
   const filters = readFilters(input);
   const unknown = unknownFilterMessage(filters);
-  if (unknown) return message(unknown);
+  if (unknown) return outOfScope(unknown);
 
   const metric: Metric = input.metric ?? "units_sold";
   const meta = METRIC_META[metric];
   const returnDefault = metric === "units_returned" || metric === "refunds" || (input.show === "rows" && filters.returnedOnly);
   const field: DateField = metric === "return_rate" ? "order_date" : input.dateField ?? (returnDefault ? "return_date" : "order_date");
-  const range = resolveRange(input, field);
+  const range = resolveRange(input);
   if (typeof range === "string") return message(range);
   const rangeLabel = rangeText(range);
+  if (outsideCoverage(range)) return outOfScope(coverageReason(range), rangeLabel);
   const scope = scopeText(filters);
   const sort = input.sort ?? "desc";
 
@@ -352,8 +373,9 @@ export function runQuery(input: QueryInput): QueryOutput {
   /* ---- comparison between two periods ---- */
   if (input.compareStartDate || input.compareEndDate || input.comparePeriod) {
     if (dims.some(isTime)) return message("A period comparison can't also be split by day, week or month. Ask for the trend, or compare two periods without the time split.", rangeLabel);
-    const previousRange = resolveRange({ startDate: input.compareStartDate, endDate: input.compareEndDate, period: input.comparePeriod }, field);
+    const previousRange = resolveRange({ startDate: input.compareStartDate, endDate: input.compareEndDate, period: input.comparePeriod });
     if (typeof previousRange === "string") return message(previousRange, rangeLabel);
+    if (outsideCoverage(previousRange)) return outOfScope(coverageReason(previousRange), rangeText(previousRange));
     const previousItems = select(previousRange, field, filters);
     if (!items.length && !previousItems.length) return message(`No order lines matched${scope} in either period.`, `${rangeLabel} vs ${rangeText(previousRange)}`);
     const makeRow = (labels: string[], cur: number, prev: number) => ({ labels, current: cur, previous: prev, change: round2(cur - prev), changePct: prev === 0 ? null : (cur - prev) / prev });

@@ -2,7 +2,7 @@ import { orders, returns } from "./merchant-data";
 import type { Channel, Order } from "./types";
 
 export type DateRange = { startDate: string; endDate: string };
-/** Fixed reference date for reproducible natural-language date ranges in this sample dataset. */
+/** The "current date" for all relative phrases (last week, this month, ...). Fixed so the sample dataset stays reproducible; change it to today's date for a live store. */
 export const FIXED_TODAY = "2025-10-28";
 const inRange = (date: string, { startDate, endDate }: DateRange) => date >= startDate && date <= endDate;
 const rangeOrders = (range: DateRange) => orders.filter((order) => inRange(order.orderDate, range));
@@ -45,9 +45,9 @@ export function topProductCategory(startDate: string, endDate: string) {
 
 export function latestOrderDate() { return orders.reduce((latest, order) => order.orderDate > latest ? order.orderDate : latest, orders[0].orderDate); }
 
-/** Calendar rules: "last week" is the Mon–Sun week before the given fixed date; "this month" follows latest order entry. */
+/** Calendar rules: "last week" is the Mon–Sun week before the current date; "this month" runs from the 1st of the current month through the current date. */
 export function resolveDateRule(rule: "last week" | "this month", fixedDate = FIXED_TODAY) {
-  if (rule === "this month") { const latest = latestOrderDate(); return { startDate: `${latest.slice(0, 7)}-01`, endDate: latest }; }
+  if (rule === "this month") return { startDate: `${fixedDate.slice(0, 7)}-01`, endDate: fixedDate };
   const anchor = new Date(`${fixedDate}T00:00:00Z`);
   const day = anchor.getUTCDay() || 7;
   anchor.setUTCDate(anchor.getUTCDate() - day - 6);
