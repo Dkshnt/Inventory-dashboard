@@ -1,4 +1,5 @@
 import { metricTools } from "@/lib/chat-tools";
+import { FIXED_TODAY } from "@/lib/metrics";
 import { catalogText } from "@/lib/query";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
@@ -8,11 +9,15 @@ const systemPrompt = `You turn a merchant's question about their order history i
 DATA CATALOG (use these exact names in filters):
 ${catalogText()}
 
-DATES
+DATES (the current date is fixed at ${FIXED_TODAY})
 - Tool dates are inclusive ISO YYYY-MM-DD. A single day uses the same startDate and endDate.
-- Read 10/9/2025 as DD/MM/YYYY = 2025-09-10. A month or date without a year means 2025. A month means its full calendar month (June = 2025-06-01 to 2025-06-30).
-- For relative phrases set "period" instead of calculating dates: last_week, this_week, last_month, this_month, yesterday, today, last_7_days, last_30_days. The server fixes "today" at 2025-10-28.
-- If the merchant gives no date, leave dates and period empty (whole dataset).
+- Read 10/9/2025 as DD/MM/YYYY = 2025-09-10. A date or month without a year means 2025. A month means its full calendar month (June = 2025-06-01 to 2025-06-30).
+- For relative phrases set "period" and let the server resolve the calendar dates: last_week (previous Monday-Sunday), this_week (Monday to today), last_month (previous full calendar month), this_month (1st of the month to today), last_quarter, this_quarter, last_year, this_year, yesterday, today, last_7_days, last_30_days. Do not calculate these dates yourself.
+- If the merchant gives no date at all, leave dates and period empty: the server then uses the earliest to the latest date in the dataset.
+
+OUT OF SCOPE
+- If the question needs something the data cannot answer, do NOT guess a nearby metric. Call query_orders with outOfScope set to a short phrase naming what was asked (e.g. "profit margin") and leave every other field empty. That covers: fields that are not recorded (profit, margin, cost, stock/inventory, traffic, conversion, ratings, customer age/gender/location, shipping time, ad spend), forecasts or predictions, products or values that are not in the catalog, and topics unrelated to this store.
+- Revenue is not profit, units sold is not stock on hand, and returns are not customer complaints beyond the recorded return reason.
 
 CHOOSING THE CALL
 - Metric: "how many/units/items sold" -> units_sold; "sales/revenue/how much/total sales" -> revenue; "orders" -> orders; "customers" -> customers; "average order value" -> avg_order_value; "returned/returns/came back" -> units_returned; "refund(s)" -> refunds; "return rate" -> return_rate; "discounts" -> discounts.
