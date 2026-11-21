@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runMetricTool } from "./chat-tools";
+import { asSchema } from "ai";
+import { metricTools } from "./chat-tools";
+import { querySchema } from "./query";
 
-test("metric tool execution uses the selected exact date range", () => {
-  const result = runMetricTool("total_sales_for_black_items", { startDate: "2025-10-14", endDate: "2025-10-14" });
-  assert.equal(result.answer, "Total sales for black items: $219.00.");
-  assert.equal(result.range, "2025-10-14 to 2025-10-14");
+test("the model gets one general query tool", () => {
+  assert.deepEqual(Object.keys(metricTools), ["query_orders"]);
 });
 
-test("metric tool execution rejects invalid dates", () => {
-  assert.throws(() => runMetricTool("most_sold_product", { startDate: "October", endDate: "2025-10-31" }));
+test("the tool schema converts to JSON schema and accepts null/omitted optional fields", async () => {
+  const json = await asSchema(querySchema).jsonSchema as { properties: Record<string, unknown> };
+  for (const key of ["metric", "groupBy", "products", "categories", "colors", "channels", "startDate", "endDate", "period", "compareStartDate", "show"]) assert.ok(key in json.properties, key);
+  assert.ok(querySchema.safeParse({ metric: "revenue", groupBy: ["month"], startDate: null, products: null }).success);
+  assert.ok(querySchema.safeParse({}).success);
+  assert.ok(!querySchema.safeParse({ metric: "profit" }).success);
+  assert.ok(!querySchema.safeParse({ startDate: "June" }).success);
 });
