@@ -121,3 +121,11 @@ npm run lint
 npm test
 npm run build
 ```
+Answers to questions - 
+<img width="1334" height="738" alt="image" src="https://github.com/user-attachments/assets/2bb9eb63-6b49-4159-81ff-f67a87bee6ac" />
+<img width="1308" height="764" alt="image" src="https://github.com/user-attachments/assets/be19ae82-503b-46b6-ab4a-38de34bd5e96" />
+<img width="1284" height="698" alt="image" src="https://github.com/user-attachments/assets/f6476104-ffc0-4e66-89ea-c8d78f078571" />
+<img width="1332" height="786" alt="image" src="https://github.com/user-attachments/assets/086f8d63-9485-4438-9512-6a3b24be1eb1" />
+<img width="1298" height="686" alt="image" src="https://github.com/user-attachments/assets/8135227f-cead-4b59-8a25-b765e4fa0c0c" />
+
+
